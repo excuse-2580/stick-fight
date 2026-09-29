@@ -53,13 +53,13 @@ color:#fff;background:var(--c);padding:2px 6px;border-radius:20px}
 
 /* ========== 对战页 ========== */
 #s-fight{gap:10px}
-#arena{width:100%;max-width:760px;flex:1;min-height:0;position:relative;background:#fafafd;
+#arena{width:100%;max-width:760px;flex:1;min-height:320px;position:relative;background:#fafafd;
 border-radius:18px;overflow:hidden;border:2px solid #e4e4ea;touch-action:none}
 .hud{position:absolute;top:10px;left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:5}
 .bar{flex:1;height:14px;border-radius:8px;background:rgba(0,0,0,.12);overflow:hidden}
 .bar>i{display:block;height:100%;width:100%;transition:width .15s}
-#b1>i{background:#3b82f6}
-#b2>i{background:#ef4444;float:right}
+#b1{background:#3b82f6}
+#b2{background:#ef4444;float:right}
 .timer{font-size:22px;font-weight:900;color:#333;min-width:52px;text-align:center}
 canvas{width:100%;height:100%;display:block}
 #msg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
@@ -117,7 +117,7 @@ display:flex;align-items:center;justify-content:center;user-select:none;touch-ac
 <div class="timer" id="timer">60</div>
 <div class="bar"><i id="b2"></i></div>
 </div>
-<canvas id="cv" width="760" height="520"></canvas>
+<canvas id="cv"></canvas>
 <div id="msg"><span id="msgText"></span><small>点击重开</small></div>
 </div>
 <div class="ctrl">
@@ -200,13 +200,43 @@ go('#/fight');
 /* ===== 对战 ===== */
 var game={running:false,me:CHARS[0],ai:CHARS[1],p:[],k:{},t:60,loop:null};
 var cv=document.getElementById('cv'),cx=cv.getContext('2d');
+var arena=document.getElementById('arena');
+var FOOT=26;                 // 脚底相对角色原点的偏移
+function GROUND(){return cv._h-40;}   // 地面线 y（CSS 像素）
+function STAND(){return GROUND()-FOOT;} // 站立时角色原点 y
+/* 角色随画布高度自适应，保证手机上不会小得看不清 */
+function scale(){return Math.max(0.9,Math.min(1.5,cv._h/380));}
+
+/* canvas 内部尺寸 = 实际显示尺寸，1:1 绘制，
+   避免固定坐标被 CSS 拉伸导致角色变形/变小 */
+function fitCanvas(){
+var dpr=Math.min(window.devicePixelRatio||1,2);
+var w=Math.max(240,arena.clientWidth||320);
+var h=Math.max(260,arena.clientHeight||420);
+cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);
+cv.style.width=w+'px';cv.style.height=h+'px';
+cv._w=w;cv._h=h;
+cx.setTransform(dpr,0,0,dpr,0,0);
+/* 画布变了，把角色拉回地面，防止悬空或陷地 */
+for(var i=0;i<game.p.length;i++){
+var u=game.p[i];
+if(u.y>STAND()){u.y=STAND();u.vy=0;u.on=1;}
+u.x=Math.max(18,Math.min(w-18,u.x));
+}
+}
+addEventListener('resize',function(){
+fitCanvas();
+if(game.running)draw();
+});
+addEventListener('orientationchange',function(){setTimeout(function(){fitCanvas();if(game.running)draw();},150)});
 
 function mk(x,y,dir,c){return{x:x,y:y,vx:0,vy:0,on:1,dir:dir,cd:0,hurt:0,c:c,hp:c.stat.hp,max:c.stat.hp,atk:0};}
 
 function start(){
 clearInterval(game.loop);
-var W=cv.width,H=cv.height;
-game.p=[mk(120,H-60,1,game.me),mk(W-120,H-60,-1,game.ai)];
+fitCanvas();
+var W=cv._w,gy=STAND();
+game.p=[mk(Math.min(120,W*0.18),gy,1,game.me),mk(Math.max(W-120,W*0.82),gy,-1,game.ai)];
 game.k={};game.t=60;game.running=true;
 document.getElementById('msg').style.display='none';
 document.getElementById('timer').textContent=game.t;
@@ -219,42 +249,44 @@ requestAnimationFrame(step);
 }
 
 function step(){
-var W=cv.width,H=cv.height,G=0.8,p=game.p;
+var W=cv._w,H=cv._h,G=0.8,p=game.p;
 if(!p.length)return;
+var S=scale(),gy=STAND();
+var JUMP=-13*S,ATKV=8.5*S;
 
 /* 玩家输入 */
 var m=p[0];
 m.vx=0;
 if(game.k['a'])m.vx=-m.c.stat.spd;
 if(game.k['d'])m.vx=m.c.stat.spd;
-if(game.k['w']&&m.on)m.vy=-13;
+if(game.k['w']&&m.on)m.vy=JUMP;
 if(game.k['f']&&m.cd<=0){m.atk=10;m.cd=m.c.stat.aspd*30;}
 
 /* AI */
 var e=p[1],dist=m.x-e.x;
 e.vx=0;
-if(Math.abs(dist)>62){e.vx=(dist>0?1:-1)*e.c.stat.spd*0.85;e.dir=dist>0?1:-1;}
-else{if(e.cd<=0){e.atk=8;e.cd=e.c.stat.aspd*30;}if(Math.random()<0.02&&e.on)e.vy=-12;}
-if(Math.abs(dist)>240&&Math.random()<0.01&&e.on)e.vy=-13;
+if(Math.abs(dist)>62*S){e.vx=(dist>0?1:-1)*e.c.stat.spd*0.85;e.dir=dist>0?1:-1;}
+else{if(e.cd<=0){e.atk=8;e.cd=e.c.stat.aspd*30;}if(Math.random()<0.02&&e.on)e.vy=JUMP*0.9;}
+if(Math.abs(dist)>240*S&&Math.random()<0.01&&e.on)e.vy=JUMP;
 
 /* 物理 */
 for(var i=0;i<2;i++){
 var u=p[i];
 u.vy+=G;u.x+=u.vx;u.y+=u.vy;
 u.atk*=0.85;u.hurt*=0.9;u.cd-=1;
-if(u.y>=H-60){u.y=H-60;u.vy=0;u.on=1;}else u.on=0;
+if(u.y>=gy){u.y=gy;u.vy=0;u.on=1;}else u.on=0;
 u.x=Math.max(18,Math.min(W-18,u.x));
 }
 
 /* 攻击判定 */
 for(var i=0;i<2;i++){
 var a=p[i],b=p[1-i];
-if(a.atk>2&&Math.abs(a.x-b.x)<52&&Math.abs(a.y-b.y)<70&&b.hurt<1){
+if(a.atk>2&&Math.abs(a.x-b.x)<52*S&&Math.abs(a.y-b.y)<70*S&&b.hurt<1){
 var crit=Math.random()<a.c.stat.crit;
 var dmg=a.c.stat.atk*(crit?1.8:1);
 if(b.c.id==='square')dmg*=0.8;
 b.hp=Math.max(0,b.hp-dmg);b.hurt=8;
-b.vx=a.dir*8.5*(crit?1.4:1);b.vy=-5;
+b.vx=a.dir*ATKV*(crit?1.4:1);b.vy=-5;
 }
 }
 
@@ -267,15 +299,15 @@ requestAnimationFrame(step);
 }
 
 function draw(){
-var W=cv.width,H=cv.height;
+var W=cv._w,H=cv._h,S=scale();
 cx.clearRect(0,0,W,H);
 cx.fillStyle='#fafafd';cx.fillRect(0,0,W,H);
 cx.strokeStyle='#e4e4ea';cx.lineWidth=2;cx.beginPath();
-cx.moveTo(0,H-60);cx.lineTo(W,H-60);cx.stroke();
+cx.moveTo(0,GROUND());cx.lineTo(W,GROUND());cx.stroke();
 
 for(var i=0;i<2;i++){
 var u=game.p[i],c=u.c,t=Date.now();
-cx.save();cx.translate(u.x,u.y);cx.scale(u.dir,1);
+cx.save();cx.translate(u.x,u.y);cx.scale(u.dir*S,S);
 cx.strokeStyle=c.color;cx.lineWidth=4;cx.lineCap='round';cx.fillStyle='none';
 var s=Math.sin(t/70)*6*Math.min(1,Math.abs(u.vx)/3);
 /* 腿 */
