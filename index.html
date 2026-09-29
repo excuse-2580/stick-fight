@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>火柴人大战</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:#fff;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;overflow:hidden}
+#app{position:relative;width:100vw;height:100vh;overflow:hidden}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.screen.on{display:flex}
+
+/* ========== 启动页 ========== */
+.figs{position:absolute;inset:0;z-index:-1;opacity:.14;pointer-events:none}
+.figs svg{width:100%;height:100%}
+.a1{transform-origin:30% 70%;animation:bob 1.4s ease-in-out infinite}
+.a2{transform-origin:72% 60%;animation:bob 1.4s ease-in-out infinite .35s}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-14px) rotate(4deg)}}
+.title{font-size:44px;font-weight:900;color:#111;letter-spacing:2px;animation:drop .6s cubic-bezier(.2,1.4,.4,1) both}
+.title .vs{color:#3b6ef6;font-style:italic}
+@keyframes drop{from{opacity:0;transform:translateY(-26px) scale(.9)}to{opacity:1;transform:none}}
+.btn{width:200px;height:64px;border:none;background:#2f6bf0;color:#c7b8ff;font-size:26px;font-weight:800;
+letter-spacing:6px;border-radius:16px;cursor:pointer;margin-top:52px;
+box-shadow:0 8px 0 #1d4cc4,0 14px 24px rgba(47,107,240,.28);
+animation:rise .6s .15s cubic-bezier(.2,1.4,.4,1) both;transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(6px);box-shadow:0 2px 0 #1d4cc4,0 4px 10px rgba(47,107,240,.28)}
+@keyframes rise{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:none}}
+.hint{font-size:13px;color:#9aa;margin-top:16px;animation:fade 1s 1s both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+/* ========== 选人页 ========== */
+.selh1{font-size:26px;color:#6b3ff0;font-weight:900;margin-bottom:4px}
+.selsub{font-size:12px;color:#9aa;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:460px}
+.card{position:relative;border:2px solid #e4e4ea;border-radius:16px;padding:12px 6px 10px;
+display:flex;flex-direction:column;align-items:center;cursor:pointer;background:#fff;
+transition:transform .12s,border-color .15s,box-shadow .15s}
+.pic{width:76px;height:96px;display:flex;align-items:center;justify-content:center}
+.pic svg{width:100%;height:100%;overflow:visible}
+.name{font-size:12px;font-weight:800;margin-top:4px}
+.tag{font-size:10px;color:#8b8b95;margin-top:3px;text-align:center;line-height:1.3}
+.card.on{border-color:var(--c);box-shadow:0 0 0 3px rgba(139,92,246,.22);transform:translateY(-4px)}
+.card.on::after{content:"已选";position:absolute;top:6px;right:6px;font-size:9px;font-weight:800;
+color:#fff;background:var(--c);padding:2px 6px;border-radius:20px}
+.card:active{transform:scale(.96)}
+.btns{display:flex;gap:12px;margin-top:22px;width:100%;max-width:340px}
+.mini{border:none;border-radius:14px;height:52px;font-size:17px;font-weight:900;cursor:pointer}
+#back{background:#f0f0f4;color:#555;flex:.55}
+#go{background:#2f6bf0;color:#fff;box-shadow:0 6px 0 #1d4cc4;flex:1}
+#go[disabled]{background:#c9c9d4;box-shadow:none;cursor:not-allowed}
+
+/* ========== 对战页 ========== */
+#s-fight{gap:10px}
+#arena{width:100%;max-width:760px;flex:1;min-height:0;position:relative;background:#fafafd;
+border-radius:18px;overflow:hidden;border:2px solid #e4e4ea;touch-action:none}
+.hud{position:absolute;top:10px;left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:5}
+.bar{flex:1;height:14px;border-radius:8px;background:rgba(0,0,0,.12);overflow:hidden}
+.bar>i{display:block;height:100%;width:100%;transition:width .15s}
+#b1>i{background:#3b82f6}
+#b2>i{background:#ef4444;float:right}
+.timer{font-size:22px;font-weight:900;color:#333;min-width:52px;text-align:center}
+canvas{width:100%;height:100%;display:block}
+#msg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+font-size:32px;font-weight:900;color:#111;background:rgba(255,255,255,.88);z-index:9;flex-direction:column;gap:14px;text-align:center;padding:20px}
+#msg small{font-size:14px;font-weight:600;color:#666}
+
+/* 屏幕控制键：常驻显示 */
+.ctrl{display:flex;gap:10px;justify-content:center;align-items:center;width:100%;max-width:420px;
+padding-bottom:env(safe-area-inset-bottom)}
+.pad{width:66px;height:58px;border-radius:14px;background:#e8e8f0;font-size:22px;font-weight:900;color:#333;
+display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;flex:1;max-width:90px}
+.pad:active,.pad.on{background:#2f6bf0;color:#fff;transform:scale(.94)}
+.pad.atk{background:#ff4d4f;color:#fff;flex:1.5}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- 启动页 -->
+<section class="screen on" id="s-home">
+<div class="figs"><svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice">
+<g class="a1" stroke="#222" stroke-width="6" stroke-linecap="round" fill="none">
+<circle cx="40" cy="120" r="16"/><line x1="40" y1="136" x2="40" y2="210"/>
+<line x1="40" y1="155" x2="22" y2="200"/><line x1="40" y1="155" x2="62" y2="190"/>
+<line x1="40" y1="210" x2="24" y2="260"/><line x1="40" y1="210" x2="58" y2="252"/></g>
+<g class="a2" stroke="#222" stroke-width="6" stroke-linecap="round" fill="none">
+<circle cx="330" cy="100" r="16"/><line x1="330" y1="116" x2="330" y2="190"/>
+<line x1="330" y1="135" x2="352" y2="105"/><line x1="330" y1="135" x2="308" y2="175"/>
+<line x1="330" y1="190" x2="350" y2="240"/><line x1="330" y1="190" x2="312" y2="238"/></g>
+</svg></div>
+<h1 class="title">火柴人<span class="vs">大战</span></h1>
+<button class="btn" id="toSelect">游戏</button>
+<p class="hint">点击「游戏」开始</p>
+</section>
+
+<!-- 选人页 -->
+<section class="screen" id="s-select">
+<h1 class="selh1">选择你的火柴人</h1>
+<div class="selsub">不同火柴人，不同手感</div>
+<div class="grid" id="grid"></div>
+<div class="btns">
+<button class="mini" id="back">返回</button>
+<button class="mini" id="go" disabled>开始战斗</button>
+</div>
+</section>
+
+<!-- 对战页 -->
+<section class="screen" id="s-fight">
+<div id="arena">
+<div class="hud">
+<div class="bar"><i id="b1"></i></div>
+<div class="timer" id="timer">60</div>
+<div class="bar"><i id="b2"></i></div>
+</div>
+<canvas id="cv" width="760" height="520"></canvas>
+<div id="msg"><span id="msgText"></span><small>点击重开</small></div>
+</div>
+<div class="ctrl">
+<div class="pad" data-k="a">◀</div>
+<div class="pad" data-k="d">▶</div>
+<div class="pad" data-k="w">▲</div>
+<div class="pad atk" data-k="f">拳</div>
+</div>
+</section>
+
+</div>
+
+<script>
+var CHARS=[
+{id:'square',name:'方火柴人',color:'#8b5cf6',tag:'防御+20%',head:'square',stat:{hp:120,spd:3.2,atk:11,aspd:1.0,crit:.12}},
+{id:'round',name:'圆头火柴人',color:'#84cc16',tag:'攻速最快',head:'round',stat:{hp:90,spd:3.6,atk:8,aspd:1.6,crit:.10}},
+{id:'long',name:'长腿火柴人',color:'#3b82f6',tag:'跳得更高',head:'round',long:1,stat:{hp:95,spd:4.4,atk:9,aspd:1.2,crit:.10}},
+{id:'fat',name:'胖火柴人',color:'#f97316',tag:'血厚攻重',head:'fat',stat:{hp:150,spd:2.6,atk:17,aspd:.75,crit:.08}},
+{id:'eye',name:'独眼火柴人',color:'#ef4444',tag:'暴击率高',head:'round',eye:1,stat:{hp:100,spd:3.4,atk:10,aspd:1.1,crit:.30}}
+];
+
+/* 角色 SVG */
+function SVG(c){
+var NS='http://www.w3.org/2000/svg';
+var E=function(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e};
+var s=E('svg',{viewBox:'0 0 60 80'});
+var g=E('g',{stroke:c.color,'stroke-width':'3','stroke-linecap':'round','stroke-linejoin':'round',fill:'none'});
+var bodyH=c.long?34:26,top=16;
+var head=(function(){var y=top-10;
+if(c.head==='square')return E('rect',{x:23,y:y,width:14,height:14,rx:3});
+return E('circle',{cx:30,cy:y+7,rx:7,ry:7})})();
+if(c.eye)g.appendChild(E('circle',{cx:30,cy:top-3,rx:1.6,ry:1.6,fill:c.color,'stroke-width':'0'}));
+g.appendChild(head);
+g.appendChild(E('line',{x1:30,y1:top,x2:30,y2:top+bodyH}));
+g.appendChild(E('line',{x1:30,y1:top+8,x2:19,y2:top+20}));
+g.appendChild(E('line',{x1:30,y1:top+8,x2:42,y2:top+18}));
+g.appendChild(E('line',{x1:30,y1:top+bodyH,x2:21,y2:top+bodyH+14}));
+g.appendChild(E('line',{x1:30,y1:top+bodyH,x2:39,y2:top+bodyH+14}));
+if(c.head==='fat'){g.setAttribute('stroke-width','4');
+g.appendChild(E('path',{d:'M24 '+top+' q6 -8 12 0',fill:'none'}))}
+s.appendChild(g);return s;
+}
+
+/* ===== 路由 ===== */
+var VALID={home:1,select:1,fight:1};
+function go(h){
+var k=(h||'').replace(/^#\/?/,'').split('/')[0];
+if(!VALID[k])k='home';
+var list=document.querySelectorAll('.screen');
+for(var i=0;i<list.length;i++)list[i].classList.toggle('on',list[i].id==='s-'+k);
+if(k==='fight'&&!game.running)start();
+location.hash='#/'+k;
+}
+addEventListener('hashchange',function(){go(location.hash)});
+document.getElementById('toSelect').onclick=function(){go('#/select')};
+document.getElementById('back').onclick=function(){go('#/home')};
+
+/* ===== 选人 ===== */
+var grid=document.getElementById('grid'),pick=null;
+CHARS.forEach(function(c){
+var el=document.createElement('div');el.className='card';
+el.style.setProperty('--c',c.color);
+var pic=document.createElement('div');pic.className='pic';pic.appendChild(SVG(c));
+var nm=document.createElement('div');nm.className='name';nm.textContent=c.name;nm.style.color=c.color;
+var tg=document.createElement('div');tg.className='tag';tg.textContent=c.tag;
+el.appendChild(pic);el.appendChild(nm);el.appendChild(tg);
+el.onclick=function(){pick=c.id;
+var kids=grid.children;
+for(var i=0;i<kids.length;i++)kids[i].classList.toggle('on',kids[i]===el);
+document.getElementById('go').disabled=false;};
+grid.appendChild(el);
+});
+document.getElementById('go').onclick=function(){
+var me=CHARS.filter(function(c){return c.id===pick})[0];
+var o=CHARS.filter(function(c){return c.id!==pick});
+game.me=me;game.ai=o[Math.floor(Math.random()*o.length)];
+go('#/fight');
+};
+
+/* ===== 对战 ===== */
+var game={running:false,me:CHARS[0],ai:CHARS[1],p:[],k:{},t:60,loop:null};
+var cv=document.getElementById('cv'),cx=cv.getContext('2d');
+
+function mk(x,y,dir,c){return{x:x,y:y,vx:0,vy:0,on:1,dir:dir,cd:0,hurt:0,c:c,hp:c.stat.hp,max:c.stat.hp,atk:0};}
+
+function start(){
+clearInterval(game.loop);
+var W=cv.width,H=cv.height;
+game.p=[mk(120,H-60,1,game.me),mk(W-120,H-60,-1,game.ai)];
+game.k={};game.t=60;game.running=true;
+document.getElementById('msg').style.display='none';
+document.getElementById('timer').textContent=game.t;
+game.loop=setInterval(function(){
+game.t--;
+document.getElementById('timer').textContent=game.t;
+if(game.t<=0){over(game.p[0].hp>game.p[1].hp?'时间到 · 你领先':(game.p[0].hp<game.p[1].hp?'时间到 · 落后':'时间到 · 平局'));}
+},1000);
+requestAnimationFrame(step);
+}
+
+function step(){
+var W=cv.width,H=cv.height,G=0.8,p=game.p;
+if(!p.length)return;
+
+/* 玩家输入 */
+var m=p[0];
+m.vx=0;
+if(game.k['a'])m.vx=-m.c.stat.spd;
+if(game.k['d'])m.vx=m.c.stat.spd;
+if(game.k['w']&&m.on)m.vy=-13;
+if(game.k['f']&&m.cd<=0){m.atk=10;m.cd=m.c.stat.aspd*30;}
+
+/* AI */
+var e=p[1],dist=m.x-e.x;
+e.vx=0;
+if(Math.abs(dist)>62){e.vx=(dist>0?1:-1)*e.c.stat.spd*0.85;e.dir=dist>0?1:-1;}
+else{if(e.cd<=0){e.atk=8;e.cd=e.c.stat.aspd*30;}if(Math.random()<0.02&&e.on)e.vy=-12;}
+if(Math.abs(dist)>240&&Math.random()<0.01&&e.on)e.vy=-13;
+
+/* 物理 */
+for(var i=0;i<2;i++){
+var u=p[i];
+u.vy+=G;u.x+=u.vx;u.y+=u.vy;
+u.atk*=0.85;u.hurt*=0.9;u.cd-=1;
+if(u.y>=H-60){u.y=H-60;u.vy=0;u.on=1;}else u.on=0;
+u.x=Math.max(18,Math.min(W-18,u.x));
+}
+
+/* 攻击判定 */
+for(var i=0;i<2;i++){
+var a=p[i],b=p[1-i];
+if(a.atk>2&&Math.abs(a.x-b.x)<52&&Math.abs(a.y-b.y)<70&&b.hurt<1){
+var crit=Math.random()<a.c.stat.crit;
+var dmg=a.c.stat.atk*(crit?1.8:1);
+if(b.c.id==='square')dmg*=0.8;
+b.hp=Math.max(0,b.hp-dmg);b.hurt=8;
+b.vx=a.dir*8.5*(crit?1.4:1);b.vy=-5;
+}
+}
+
+/* 胜负 */
+if(p[0].y>H+60||p[1].y>H+60){over(p[0].y>H+60?'你被击飞了':'对手被击飞了 · 你赢');return;}
+if(p[0].hp<=0||p[1].hp<=0){over(p[0].hp<=0?'你被击败了':'你赢了！');return;}
+
+draw();
+requestAnimationFrame(step);
+}
+
+function draw(){
+var W=cv.width,H=cv.height;
+cx.clearRect(0,0,W,H);
+cx.fillStyle='#fafafd';cx.fillRect(0,0,W,H);
+cx.strokeStyle='#e4e4ea';cx.lineWidth=2;cx.beginPath();
+cx.moveTo(0,H-60);cx.lineTo(W,H-60);cx.stroke();
+
+for(var i=0;i<2;i++){
+var u=game.p[i],c=u.c,t=Date.now();
+cx.save();cx.translate(u.x,u.y);cx.scale(u.dir,1);
+cx.strokeStyle=c.color;cx.lineWidth=4;cx.lineCap='round';cx.fillStyle='none';
+var s=Math.sin(t/70)*6*Math.min(1,Math.abs(u.vx)/3);
+/* 腿 */
+cx.beginPath();cx.moveTo(0,0);cx.lineTo(-7+s,u.on?16:6);cx.moveTo(0,0);cx.lineTo(7-s,u.on?16:6);cx.stroke();
+cx.beginPath();cx.moveTo(0,16);cx.lineTo(-12,26);cx.moveTo(0,16);cx.lineTo(12,24);cx.stroke();
+/* 身体 */
+cx.beginPath();cx.moveTo(0,0);cx.lineTo(0,-30);cx.stroke();
+/* 手臂 */
+var aw=Math.abs(u.atk)>2?14:Math.sin(t/110)*4;
+cx.beginPath();cx.moveTo(0,-24);cx.lineTo(-10,-12);cx.moveTo(0,-24);cx.lineTo(10+aw,-14);cx.stroke();
+/* 头 */
+var top=-42,hw=c.head==='fat'?10:7;
+if(c.head==='square')cx.strokeRect(-hw,top,hw*2,hw*2);
+else{cx.beginPath();cx.arc(0,top+hw-1,hw,0,Math.PI*2);cx.stroke();}
+if(c.eye){cx.fillStyle=c.color;cx.beginPath();cx.arc(2,top+hw-2,1.6,0,Math.PI*2);cx.fill();}
+/* 拳影 */
+if(Math.abs(u.atk)>3){
+cx.globalAlpha=Math.min(1,u.atk/10);
+cx.beginPath();cx.arc(20,-14,8+u.atk*0.6,0,Math.PI*2);cx.stroke();
+cx.globalAlpha=1;
+}
+cx.restore();
+}
+document.getElementById('b1').style.width=(game.p[0].hp/game.p[0].max*100)+'%';
+document.getElementById('b2').style.width=(game.p[1].hp/game.p[1].max*100)+'%';
+}
+
+function over(txt){
+game.running=false;clearInterval(game.loop);
+document.getElementById('msgText').textContent=txt;
+document.getElementById('msg').style.display='flex';
+}
+document.getElementById('msg').onclick=start;
+
+/* ===== 键盘 ===== */
+function norm(e){
+var k=e.key?e.key.toLowerCase():'';
+if(k==='arrowleft')k='a';
+if(k==='arrowright')k='d';
+if(k==='arrowup')k='w';
+if(k===' '||e.code==='Space')k='f';
+return k;
+}
+addEventListener('keydown',function(e){
+var k=norm(e);
+if(['a','d','w','f'].indexOf(k)>=0){game.k[k]=1;e.preventDefault();}
+});
+addEventListener('keyup',function(e){
+var k=norm(e);
+if(['a','d','w','f'].indexOf(k)>=0){game.k[k]=0;e.preventDefault();}
+});
+
+/* ===== 屏幕按键（鼠标 + 触屏都行） ===== */
+var pads=document.querySelectorAll('.pad');
+for(var i=0;i<pads.length;i++){
+(function(p){
+var k=p.getAttribute('data-k');
+var down=function(e){
+if(e.cancelable)e.preventDefault();
+game.k[k]=1;p.classList.add('on');
+if(e.pointerId!=null&&p.setPointerCapture){try{p.setPointerCapture(e.pointerId)}catch(_){}}
+};
+var up=function(e){
+if(e.cancelable)e.preventDefault();
+game.k[k]=0;p.classList.remove('on');
+};
+p.addEventListener('pointerdown',down);
+p.addEventListener('pointerup',up);
+p.addEventListener('pointercancel',up);
+p.addEventListener('pointerleave',up);
+})(pads[i]);
+}
+
+go(location.hash||'#/home');
+</script>
+</body>
+</html>
