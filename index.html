@@ -72,10 +72,21 @@ font-size:32px;font-weight:900;color:#111;background:rgba(255,255,255,.88);z-ind
 justify-content:center;align-items:center;background:#fff;
 padding:10px 12px calc(12px + env(safe-area-inset-bottom));
 box-shadow:0 -6px 18px rgba(0,0,0,.08)}
-.pad{width:66px;height:58px;border-radius:14px;background:#e8e8f0;font-size:22px;font-weight:900;color:#333;
-display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;flex:1;max-width:90px}
+.pad{width:60px;height:58px;border-radius:14px;background:#e8e8f0;font-size:20px;font-weight:900;color:#333;
+display:flex;align-items:center;justify-content:center;user-select:none;touch-action:none;flex:1;max-width:80px}
 .pad:active,.pad.on{background:#2f6bf0;color:#fff;transform:scale(.94)}
 .pad.atk{background:#ff4d4f;color:#fff;flex:1.5}
+.pad.wp{position:relative;background:#7c3aed;color:#fff;flex:1.5;flex-direction:column;gap:1px}
+.pad.wp span{font-size:19px;line-height:1}
+.pad.wp b{position:absolute;inset:0;border-radius:14px;background:rgba(0,0,0,.55);
+display:none;align-items:center;justify-content:center;font-size:15px}
+.pad.wp.cool b{display:flex}
+.pad.wp.cool{background:#9ca3af}
+/* 回血提示 */
+#regen{position:absolute;top:38px;left:0;right:0;text-align:center;font-size:12px;
+font-weight:800;color:#16a34a;z-index:6;display:none}
+#regen.on{display:block;animation:pulseg 1s ease-in-out infinite}
+@keyframes pulseg{0%,100%{opacity:.55}50%{opacity:1}}
 </style>
 </head>
 <body>
@@ -118,6 +129,7 @@ display:flex;align-items:center;justify-content:center;user-select:none;touch-ac
 <div class="bar"><i id="b2"></i></div>
 </div>
 <canvas id="cv"></canvas>
+<div id="regen">呼吸回血中…</div>
 <div id="msg"><span id="msgText"></span><small>点击重开</small></div>
 </div>
 <div class="ctrl">
@@ -125,6 +137,7 @@ display:flex;align-items:center;justify-content:center;user-select:none;touch-ac
 <div class="pad" data-k="d">▶</div>
 <div class="pad" data-k="w">▲</div>
 <div class="pad atk" data-k="f">拳</div>
+<div class="pad wp" data-k="g"><span id="wpKey">盾</span><b id="wpCd"></b></div>
 </div>
 </section>
 
@@ -132,11 +145,16 @@ display:flex;align-items:center;justify-content:center;user-select:none;touch-ac
 
 <script>
 var CHARS=[
-{id:'square',name:'方火柴人',color:'#8b5cf6',tag:'防御+20%',head:'square',stat:{hp:120,spd:3.2,atk:11,aspd:1.0,crit:.12}},
-{id:'round',name:'圆头火柴人',color:'#84cc16',tag:'攻速最快',head:'round',stat:{hp:90,spd:3.6,atk:8,aspd:1.6,crit:.10}},
-{id:'long',name:'长腿火柴人',color:'#3b82f6',tag:'跳得更高',head:'round',long:1,stat:{hp:95,spd:4.4,atk:9,aspd:1.2,crit:.10}},
-{id:'fat',name:'胖火柴人',color:'#f97316',tag:'血厚攻重',head:'fat',stat:{hp:150,spd:2.6,atk:17,aspd:.75,crit:.08}},
-{id:'eye',name:'独眼火柴人',color:'#ef4444',tag:'暴击率高',head:'round',eye:1,stat:{hp:100,spd:3.4,atk:10,aspd:1.1,crit:.30}}
+{id:'square',name:'方火柴人',color:'#8b5cf6',tag:'防御+20%',head:'square',stat:{hp:120,spd:3.2,atk:11,aspd:1.0,crit:.12},
+ wp:{name:'方盾',key:'盾',desc:'3 秒减伤 60%',kind:'shield',cd:8}},
+{id:'round',name:'圆头火柴人',color:'#84cc16',tag:'攻速最快',head:'round',stat:{hp:90,spd:3.6,atk:8,aspd:1.6,crit:.10},
+ wp:{name:'疾风连打',key:'连',desc:'1.5 秒攻速 ×3',kind:'frenzy',cd:8}},
+{id:'long',name:'长腿火柴人',color:'#3b82f6',tag:'跳得更高',head:'round',long:1,stat:{hp:95,spd:4.4,atk:9,aspd:1.2,crit:.10},
+ wp:{name:'飞踢',key:'踢',desc:'突进 + 重击飞',kind:'kick',cd:8}},
+{id:'fat',name:'胖火柴人',color:'#f97316',tag:'血厚攻重',head:'fat',stat:{hp:150,spd:2.6,atk:17,aspd:.75,crit:.08},
+ wp:{name:'重锤',key:'锤',desc:'范围重击 + 强击飞',kind:'hammer',cd:8}},
+{id:'eye',name:'独眼火柴人',color:'#ef4444',tag:'暴击率高',head:'round',eye:1,stat:{hp:100,spd:3.4,atk:10,aspd:1.1,crit:.30},
+ wp:{name:'真视激光',key:'光',desc:'远程穿透',kind:'laser',cd:8}}
 ];
 
 /* 角色 SVG */
@@ -230,7 +248,10 @@ if(game.running)draw();
 });
 addEventListener('orientationchange',function(){setTimeout(function(){fitCanvas();if(game.running)draw();},150)});
 
-function mk(x,y,dir,c){return{x:x,y:y,vx:0,vy:0,on:1,dir:dir,cd:0,hurt:0,c:c,hp:c.stat.hp,max:c.stat.hp,atk:0};}
+function mk(x,y,dir,c){
+return{x:x,y:y,vx:0,vy:0,on:1,dir:dir,cd:0,hurt:0,c:c,hp:c.stat.hp,max:c.stat.hp,atk:0,
+safe:0,wcd:0,wact:0,wfx:0,laser:0,regen:0};
+}
 
 function start(){
 clearInterval(game.loop);
@@ -240,12 +261,38 @@ game.p=[mk(Math.min(120,W*0.18),gy,1,game.me),mk(Math.max(W-120,W*0.82),gy,-1,ga
 game.k={};game.t=60;game.running=true;
 document.getElementById('msg').style.display='none';
 document.getElementById('timer').textContent=game.t;
+document.getElementById('wpKey').textContent=game.me.wp.key;
+syncWp();
 game.loop=setInterval(function(){
 game.t--;
 document.getElementById('timer').textContent=game.t;
 if(game.t<=0){over(game.p[0].hp>game.p[1].hp?'时间到 · 你领先':(game.p[0].hp<game.p[1].hp?'时间到 · 落后':'时间到 · 平局'));}
 },1000);
 requestAnimationFrame(step);
+}
+
+/* 专武冷却显示 */
+function syncWp(){
+var m=game.p[0];if(!m)return;
+var btn=document.querySelector('.pad.wp');
+var cdEl=document.getElementById('wpCd');
+if(m.wcd>0){
+btn.classList.add('cool');
+cdEl.textContent=Math.ceil(m.wcd/60)+'s';
+}else{
+btn.classList.remove('cool');cdEl.textContent='';
+}
+}
+/* 释放专武 */
+function useWeapon(u,enemy){
+if(u.wcd>0)return;
+u.wcd=u.c.wp.cd*60;u.wact=0;
+var k=u.c.wp.kind,S=scale();
+if(k==='shield'){u.wfx=180;}                                  // 3 秒减伤
+if(k==='frenzy'){u.wfx=90;}                                   // 1.5 秒攻速 x3
+if(k==='kick'){u.vx=u.dir*14*S;u.vy=-8*S;u.wfx=20;u.atk=20;}  // 突进飞踢
+if(k==='hammer'){u.wfx=20;u.atk=26;}                          // 重锤（范围大）
+if(k==='laser'){u.laser=26;}                                  // 激光射线
 }
 
 function step(){
@@ -260,7 +307,10 @@ m.vx=0;
 if(game.k['a'])m.vx=-m.c.stat.spd;
 if(game.k['d'])m.vx=m.c.stat.spd;
 if(game.k['w']&&m.on)m.vy=JUMP;
-if(game.k['f']&&m.cd<=0){m.atk=10;m.cd=m.c.stat.aspd*30;}
+/* 普通攻击（疾风连打时攻速翻 3 倍） */
+var asp=m.c.stat.aspd*(m.wfx>0&&m.c.wp.kind==='frenzy'?1/3:1);
+if(game.k['f']&&m.cd<=0){m.atk=10;m.cd=asp*30;}
+if(game.k['g'])useWeapon(m,p[1]);
 
 /* AI */
 var e=p[1],dist=m.x-e.x;
@@ -268,27 +318,66 @@ e.vx=0;
 if(Math.abs(dist)>62*S){e.vx=(dist>0?1:-1)*e.c.stat.spd*0.85;e.dir=dist>0?1:-1;}
 else{if(e.cd<=0){e.atk=8;e.cd=e.c.stat.aspd*30;}if(Math.random()<0.02&&e.on)e.vy=JUMP*0.9;}
 if(Math.abs(dist)>240*S&&Math.random()<0.01&&e.on)e.vy=JUMP;
+/* AI 也会放专武 */
+if(e.wcd<=0&&Math.random()<0.012)useWeapon(e,m);
 
-/* 物理 */
+/* 物理 + 计时衰减 */
 for(var i=0;i<2;i++){
 var u=p[i];
 u.vy+=G;u.x+=u.vx;u.y+=u.vy;
 u.atk*=0.85;u.hurt*=0.9;u.cd-=1;
+if(u.wcd>0)u.wcd--;
+if(u.wfx>0)u.wfx--;
+if(u.laser>0)u.laser--;
 if(u.y>=gy){u.y=gy;u.vy=0;u.on=1;}else u.on=0;
 u.x=Math.max(18,Math.min(W-18,u.x));
 }
 
+/* ---- 呼吸回血：脱战 2.5 秒后缓慢回，站着不动回得更快 ---- */
+for(var i=0;i<2;i++){
+var u=p[i];
+if(u.hurt<1)u.safe++;else u.safe=0;
+var moving=Math.abs(u.vx)>0.3||!u.on||u.atk>2||u.laser>0;
+if(u.safe>150&&u.hp<u.max&&!moving){
+var rate=u.max*0.0035;                       // 站立：每秒约 3.5%
+if(!u.on||Math.abs(u.vx)>0.3)rate*=0.4;      // 移动/空中：大幅减慢
+u.hp=Math.min(u.max,u.hp+rate);
+u.regen=1;
+}else u.regen=0;
+}
+document.getElementById('regen').classList.toggle('on',!!p[0].regen&&p[0].hp<p[0].max);
+
 /* 攻击判定 */
 for(var i=0;i<2;i++){
 var a=p[i],b=p[1-i];
-if(a.atk>2&&Math.abs(a.x-b.x)<52*S&&Math.abs(a.y-b.y)<70*S&&b.hurt<1){
+
+/* 激光：远程穿透，无视距离 */
+if(a.laser>0){
+var dy=Math.abs(a.y-b.y);
+var infront=(b.x-a.x)*a.dir>0;
+if(infront&&dy<70*S&&b.hurt<1){
+var d=a.c.stat.atk*1.1+6;
+if(b.c.id==='square')d*=0.8;
+if(b.wfx>0&&b.c.wp.kind==='shield')d*=0.4;
+b.hp=Math.max(0,b.hp-d);b.hurt=4;b.vx=a.dir*3;
+}
+}
+
+/* 近身攻击 */
+var reach=a.c.wp.kind==='hammer'?78*S:52*S;
+if(a.atk>2&&Math.abs(a.x-b.x)<reach&&Math.abs(a.y-b.y)<70*S&&b.hurt<1){
 var crit=Math.random()<a.c.stat.crit;
 var dmg=a.c.stat.atk*(crit?1.8:1);
+if(a.wfx>0&&a.c.wp.kind==='kick')dmg*=1.6;
+if(a.wfx>0&&a.c.wp.kind==='hammer')dmg*=1.8;
 if(b.c.id==='square')dmg*=0.8;
+if(b.wfx>0&&b.c.wp.kind==='shield')dmg*=0.4;   // 方盾减伤 60%
 b.hp=Math.max(0,b.hp-dmg);b.hurt=8;
-b.vx=a.dir*ATKV*(crit?1.4:1);b.vy=-5;
+b.vx=a.dir*ATKV*(crit?1.4:1)*(a.c.wp.kind==='hammer'?1.6:1);b.vy=-5;
+b.safe=0;
 }
 }
+syncWp();
 
 /* 胜负 */
 if(p[0].y>H+60||p[1].y>H+60){over(p[0].y>H+60?'你被击飞了':'对手被击飞了 · 你赢');return;}
@@ -329,6 +418,41 @@ cx.globalAlpha=Math.min(1,u.atk/10);
 cx.beginPath();cx.arc(20,-14,8+u.atk*0.6,0,Math.PI*2);cx.stroke();
 cx.globalAlpha=1;
 }
+/* 专武特效 */
+if(u.wfx>0&&u.c.wp.kind==='shield'){
+cx.strokeStyle='#8b5cf6';cx.lineWidth=3;cx.globalAlpha=.85;
+cx.beginPath();cx.moveTo(16,-38);cx.lineTo(16,-6);cx.stroke();
+cx.beginPath();cx.moveTo(16,-22);cx.lineTo(9,-22);cx.moveTo(16,-22);cx.lineTo(23,-22);cx.stroke();
+cx.globalAlpha=1;
+}
+if(u.wfx>0&&u.c.wp.kind==='frenzy'){
+cx.strokeStyle='#84cc16';cx.lineWidth=2;cx.globalAlpha=.7;
+for(var q=0;q<3;q++){
+var a2=t/80+q*2.1;
+cx.beginPath();cx.arc(0,-20,26+q*5,a2,a2+0.9);cx.stroke();
+}
+cx.globalAlpha=1;
+}
+if(u.wfx>0&&u.c.wp.kind==='kick'){
+cx.strokeStyle='#3b82f6';cx.lineWidth=5;
+cx.beginPath();cx.moveTo(0,4);cx.lineTo(22,10);cx.stroke();
+}
+if(u.wfx>0&&u.c.wp.kind==='hammer'){
+cx.strokeStyle='#f97316';cx.lineWidth=4;
+cx.beginPath();cx.moveTo(0,-24);cx.lineTo(18,-16);cx.stroke();
+cx.lineWidth=7;cx.beginPath();cx.moveTo(18,-22);cx.lineTo(18,-10);cx.stroke();
+}
+if(u.laser>0){
+cx.strokeStyle='#ef4444';cx.lineWidth=3;cx.globalAlpha=Math.min(1,u.laser/26);
+cx.beginPath();cx.moveTo(14,-20);cx.lineTo(W, -20);cx.stroke();
+cx.globalAlpha=1;
+}
+/* 回血光点 */
+if(u.regen&&u.hp<u.max){
+cx.strokeStyle='#16a34a';cx.lineWidth=2;cx.globalAlpha=.6;
+cx.beginPath();cx.arc(0,-52,10*scale()*0.6,0,Math.PI*2);cx.stroke();
+cx.globalAlpha=1;
+}
 cx.restore();
 }
 document.getElementById('b1').style.width=(game.p[0].hp/game.p[0].max*100)+'%';
@@ -349,15 +473,16 @@ if(k==='arrowleft')k='a';
 if(k==='arrowright')k='d';
 if(k==='arrowup')k='w';
 if(k===' '||e.code==='Space')k='f';
+if(k==='g'||k==='shift'||e.code==='ShiftLeft'||e.code==='ShiftRight')k='g';
 return k;
 }
 addEventListener('keydown',function(e){
 var k=norm(e);
-if(['a','d','w','f'].indexOf(k)>=0){game.k[k]=1;e.preventDefault();}
+if(['a','d','w','f','g'].indexOf(k)>=0){game.k[k]=1;e.preventDefault();}
 });
 addEventListener('keyup',function(e){
 var k=norm(e);
-if(['a','d','w','f'].indexOf(k)>=0){game.k[k]=0;e.preventDefault();}
+if(['a','d','w','f','g'].indexOf(k)>=0){game.k[k]=0;e.preventDefault();}
 });
 
 /* ===== 屏幕按键（鼠标 + 触屏都行） ===== */
